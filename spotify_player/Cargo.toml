@@ -77,4 +77,4 @@ notify = ["notify-rust"]
 clipboard = ["copypasta"]
 daemon = ["daemonize"]
 
-default = ["rodio-backend", "media-control", "clipboard"]
+default = ["rodio-backend", "media-control", "clipboard", "lyric-finder", "image"]

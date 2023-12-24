@@ -70,6 +70,7 @@ pub enum ClientRequest {
     ConnectDevice(Option<String>),
     Player(PlayerRequest),
     GetCurrentUserQueue,
+    GetRealtime(TrackId<'static>),
     #[cfg(feature = "lyric-finder")]
     GetLyric {
         track: String,
@@ -420,6 +421,10 @@ fn handle_global_command(
                     artists: artists.clone(),
                     scroll_offset: 0,
                 });
+
+                if let Some(track_id) = &track.id {
+                    client_pub.send(ClientRequest::GetRealtime(track_id.clone()))?;
+                }
 
                 client_pub.send(ClientRequest::GetLyric {
                     track: track.name.clone(),

@@ -66,6 +66,17 @@ pub struct SearchResults {
     pub playlists: Vec<Playlist>,
 }
 
+#[derive(Default, Clone, Debug)]
+pub struct RealtimeLyrics {
+    pub lyrics: Vec<RealtimeLyric>,
+}
+
+#[derive(Default, Clone, Debug)]
+pub struct RealtimeLyric {
+    pub words: String,
+    pub start_time_ms: i64,
+}
+
 #[derive(Debug)]
 /// A track order
 pub enum TrackOrder {

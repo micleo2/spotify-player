@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, io::Write, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, io::Write, process::Command, sync::Arc};
 
 #[cfg(feature = "streaming")]
 use crate::streaming;
@@ -20,6 +20,7 @@ mod spotify;
 
 pub use handlers::*;
 use serde::Deserialize;
+use serde_json::Value;
 
 /// The application's client
 #[derive(Clone)]
@@ -230,6 +231,9 @@ impl Client {
                     .browse
                     .category_playlists
                     .insert(category.id, playlists);
+            }
+            ClientRequest::GetRealtime(track_id) => {
+                self.get_realtime(state, track_id).await?;
             }
             #[cfg(feature = "lyric-finder")]
             ClientRequest::GetLyric { track, artists } => {
@@ -887,6 +891,42 @@ impl Client {
             .spotify
             .add_item_to_queue(PlayableId::Track(track_id), None)
             .await?)
+    }
+
+    /// Get timestamped lyrics
+    pub async fn get_realtime(&self, state: &SharedState, track_id: TrackId<'_>) -> Result<()> {
+        let track_id_str: &str = &track_id.id().to_string();
+        if state
+            .data
+            .read()
+            .caches
+            .realtimes
+            .contains_key(track_id_str)
+        {
+            return Ok(());
+        }
+        let output = Command::new("./scripts/get_synced_lyrics.py")
+            .arg(track_id_str)
+            .output()?
+            .stdout;
+        let v: Value = serde_json::from_slice(&output)?;
+        let synced_lyrics = &v["lyrics"]["lines"];
+        let mut typed_res = RealtimeLyrics { lyrics: Vec::new() };
+        if synced_lyrics.is_array() {
+            let lyrics_arr = synced_lyrics.as_array().unwrap();
+            for elm in lyrics_arr {
+                typed_res.lyrics.push(RealtimeLyric {
+                    words: elm["words"].as_str().unwrap().to_owned(),
+                    start_time_ms: elm["startTimeMs"].as_str().unwrap().parse().unwrap(),
+                });
+            }
+        }
+        state.data.write().caches.realtimes.insert(
+            track_id_str.to_string(),
+            typed_res,
+            *TTL_CACHE_DURATION,
+        );
+        Ok(())
     }
 
     /// adds track to a playlist

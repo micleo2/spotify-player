@@ -486,6 +486,108 @@ pub fn render_browse_page(
 }
 
 #[cfg(feature = "lyric-finder")]
+pub fn render_realtime_page(
+    _is_active: bool,
+    frame: &mut Frame,
+    state: &SharedState,
+    ui: &mut UIStateGuard,
+    rect: Rect,
+) -> Result<()> {
+    // 1. Get the data
+    let data = state.data.read();
+
+    // 2. Construct the app's layout
+    let rect = construct_and_render_block("Lyric", &ui.theme, state, Borders::ALL, frame, rect);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(0)].as_ref())
+        .split(rect);
+
+    // 3. Construct the app's widgets
+    let scroll_offset = match ui.current_page_mut() {
+        PageState::Lyric {
+            track: _,
+            artists: _,
+            scroll_offset,
+        } => scroll_offset,
+        s => anyhow::bail!("expect a lyric page state, found {s:?}"),
+    };
+
+    let mut track_id: Option<String> = None;
+    let player = state.player.read();
+    let mut cur_song_time_ms: i64 = 0;
+    if let Some(ref playback) = player.playback {
+        if let Some(rspotify_model::PlayableItem::Track(ref track)) = playback.item {
+            if track.id.is_some() {
+                let _ = track_id.insert(track.id.as_ref().unwrap().id().to_string());
+            }
+            let progress = std::cmp::min(
+                player
+                    .playback_progress()
+                    .context("playback should exist")?,
+                track.duration,
+            );
+            cur_song_time_ms = progress.num_milliseconds();
+        }
+    }
+    if track_id.is_none() {
+        frame.render_widget(Paragraph::new("No lyrics"), rect);
+        return Ok(());
+    }
+
+    let track_id_str: String = track_id.unwrap();
+
+    let cache_entry = data.caches.realtimes.get(&track_id_str);
+    if cache_entry.is_none() {
+        frame.render_widget(Paragraph::new("Loading..."), rect);
+        return Ok(());
+    }
+
+    let RealtimeLyrics { lyrics } = cache_entry.unwrap();
+    let mut formatted_lines = vec![];
+    for i in 0..lyrics.len() {
+        let RealtimeLyric {
+            words,
+            start_time_ms,
+        } = &lyrics[i];
+
+        let mut is_highlighted_line = false;
+        if cur_song_time_ms > *start_time_ms {
+            if i < lyrics.len() - 1 {
+                let next_start_time_ms = lyrics[i + 1].start_time_ms;
+                if cur_song_time_ms > *start_time_ms && cur_song_time_ms < next_start_time_ms {
+                    is_highlighted_line = true;
+                }
+            } else {
+                is_highlighted_line = true;
+            }
+        }
+
+        let text_style = if is_highlighted_line {
+            Style::default().fg(Color::Red)
+        } else {
+            Style::default()
+        };
+        formatted_lines.push(Line::from(vec![Span::styled(words, text_style)]));
+    }
+
+    // update the scroll offset so that it doesn't exceed the lyric's length
+    let n_rows = lyrics.len() - 1;
+    if *scroll_offset >= n_rows {
+        *scroll_offset = n_rows - 1;
+    }
+    let scroll_offset = *scroll_offset;
+
+    // render lyric text
+    frame.render_widget(
+        Paragraph::new(formatted_lines).scroll((scroll_offset as u16, 0)),
+        chunks[0],
+    );
+
+    Ok(())
+}
+
+#[cfg(feature = "lyric-finder")]
 pub fn render_lyric_page(
     _is_active: bool,
     frame: &mut Frame,

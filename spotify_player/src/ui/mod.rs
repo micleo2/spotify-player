@@ -115,6 +115,6 @@ fn render_main_layout(
         PageType::Context => page::render_context_page(is_active, frame, state, ui, rect),
         PageType::Browse => page::render_browse_page(is_active, frame, state, ui, rect),
         #[cfg(feature = "lyric-finder")]
-        PageType::Lyric => page::render_lyric_page(is_active, frame, state, ui, rect),
+        PageType::Lyric => page::render_realtime_page(is_active, frame, state, ui, rect),
     }
 }
