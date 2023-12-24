@@ -21,10 +21,16 @@ pub enum PageState {
         track: String,
         artists: String,
         scroll_offset: usize,
+        mode: LyricMode,
     },
     Browse {
         state: BrowsePageUIState,
     },
+}
+
+#[derive(Clone, Debug)]
+pub enum LyricMode {
+    SyncedView,
 }
 
 pub enum PageType {

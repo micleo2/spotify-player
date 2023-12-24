@@ -500,16 +500,13 @@ pub fn render_realtime_page(
     let rect = construct_and_render_block("Lyric", &ui.theme, state, Borders::ALL, frame, rect);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0)].as_ref())
+        .constraints([Constraint::Percentage(100)].as_ref())
         .split(rect);
+    let lyric_box = &chunks[0];
 
     // 3. Construct the app's widgets
     let scroll_offset = match ui.current_page_mut() {
-        PageState::Lyric {
-            track: _,
-            artists: _,
-            scroll_offset,
-        } => scroll_offset,
+        PageState::Lyric { scroll_offset, .. } => scroll_offset,
         s => anyhow::bail!("expect a lyric page state, found {s:?}"),
     };
 
@@ -545,6 +542,7 @@ pub fn render_realtime_page(
 
     let RealtimeLyrics { lyrics } = cache_entry.unwrap();
     let mut formatted_lines = vec![];
+    let mut highlighted_lineno: Option<u16> = None;
     for i in 0..lyrics.len() {
         let RealtimeLyric {
             words,
@@ -553,13 +551,16 @@ pub fn render_realtime_page(
 
         let mut is_highlighted_line = false;
         if cur_song_time_ms > *start_time_ms {
+            let i16 = i as u16;
             if i < lyrics.len() - 1 {
                 let next_start_time_ms = lyrics[i + 1].start_time_ms;
                 if cur_song_time_ms > *start_time_ms && cur_song_time_ms < next_start_time_ms {
                     is_highlighted_line = true;
+                    highlighted_lineno = Some(i16);
                 }
             } else {
                 is_highlighted_line = true;
+                highlighted_lineno = Some(i16);
             }
         }
 
@@ -568,20 +569,32 @@ pub fn render_realtime_page(
         } else {
             Style::default()
         };
+        // Note- lines are not wrapped.
         formatted_lines.push(Line::from(vec![Span::styled(words, text_style)]));
     }
 
+    if let Some(lineno) = highlighted_lineno {
+        // Check if the current lyric is offscreen. If so, scroll the screen the exact amount to place
+        // the highlighted lyric at the bottom of the visible screen.
+        let num_visible_lines = lyric_box.height;
+        // We also want a preview to show of the next 2 lines after the highlight.
+        let preview_lines = 2;
+        if lineno > num_visible_lines - preview_lines - 1 {
+            *scroll_offset = (lineno - num_visible_lines + preview_lines + 1) as usize;
+        }
+    }
+
     // update the scroll offset so that it doesn't exceed the lyric's length
-    let n_rows = lyrics.len() - 1;
-    if *scroll_offset >= n_rows {
-        *scroll_offset = n_rows - 1;
+    let n_lines = lyrics.len() - 1;
+    if *scroll_offset >= n_lines {
+        *scroll_offset = n_lines - 1;
     }
     let scroll_offset = *scroll_offset;
 
     // render lyric text
     frame.render_widget(
         Paragraph::new(formatted_lines).scroll((scroll_offset as u16, 0)),
-        chunks[0],
+        *lyric_box,
     );
 
     Ok(())
@@ -611,6 +624,7 @@ pub fn render_lyric_page(
             track,
             artists,
             scroll_offset,
+            ..
         } => (track, artists, scroll_offset),
         s => anyhow::bail!("expect a lyric page state, found {s:?}"),
     };
