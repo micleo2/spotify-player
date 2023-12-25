@@ -500,13 +500,19 @@ pub fn render_realtime_page(
     let rect = construct_and_render_block("Lyric", &ui.theme, state, Borders::ALL, frame, rect);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(100)].as_ref())
+        .constraints([Constraint::Length(1), Constraint::Min(0)].as_ref())
         .split(rect);
-    let lyric_box = &chunks[0];
+    let debug_box = &chunks[0];
+    let lyric_box = &chunks[1];
 
     // 3. Construct the app's widgets
-    let scroll_offset = match ui.current_page_mut() {
-        PageState::Lyric { scroll_offset, .. } => scroll_offset,
+    let (scroll_offset, mode, currently_singing_lineno) = match ui.current_page_mut() {
+        PageState::Lyric {
+            scroll_offset,
+            currently_singing_lineno,
+            mode,
+            ..
+        } => (scroll_offset, mode, currently_singing_lineno),
         s => anyhow::bail!("expect a lyric page state, found {s:?}"),
     };
 
@@ -542,8 +548,8 @@ pub fn render_realtime_page(
 
     let RealtimeLyrics { lyrics } = cache_entry.unwrap();
     let mut formatted_lines = vec![];
-    let mut highlighted_lineno: Option<u16> = None;
     for i in 0..lyrics.len() {
+        let i16 = i as u16;
         let RealtimeLyric {
             words,
             start_time_ms,
@@ -551,37 +557,48 @@ pub fn render_realtime_page(
 
         let mut is_highlighted_line = false;
         if cur_song_time_ms > *start_time_ms {
-            let i16 = i as u16;
             if i < lyrics.len() - 1 {
                 let next_start_time_ms = lyrics[i + 1].start_time_ms;
                 if cur_song_time_ms > *start_time_ms && cur_song_time_ms < next_start_time_ms {
                     is_highlighted_line = true;
-                    highlighted_lineno = Some(i16);
+                    *currently_singing_lineno = Some(i16);
                 }
             } else {
                 is_highlighted_line = true;
-                highlighted_lineno = Some(i16);
+                *currently_singing_lineno = Some(i16);
             }
         }
 
-        let text_style = if is_highlighted_line {
+        let mut text_style = if is_highlighted_line {
             Style::default().fg(Color::Red)
         } else {
             Style::default()
         };
+
+        if let LyricMode::Seek { cursor } = mode {
+            if *cursor == i16 {
+                text_style = text_style
+                    .add_modifier(Modifier::REVERSED)
+                    .add_modifier(Modifier::BOLD);
+            }
+        }
+
         // Note- lines are not wrapped.
         formatted_lines.push(Line::from(vec![Span::styled(words, text_style)]));
     }
 
-    if let Some(lineno) = highlighted_lineno {
-        // Check if the current lyric is offscreen. If so, scroll the screen the exact amount to place
-        // the highlighted lyric at the bottom of the visible screen.
-        let num_visible_lines = lyric_box.height;
-        // We also want a preview to show of the next 2 lines after the highlight.
-        let preview_lines = 2;
-        if lineno > num_visible_lines - preview_lines - 1 {
-            *scroll_offset = (lineno - num_visible_lines + preview_lines + 1) as usize;
-        }
+    let line_to_focus = match mode {
+        LyricMode::SyncedView => currently_singing_lineno.unwrap_or(0),
+        LyricMode::Seek { cursor } => *cursor,
+    };
+
+    // Check if the current focused line is offscreen. If so, scroll the screen the exact amount to place
+    // the highlighted lyric at the bottom of the visible screen.
+    let num_visible_lines = lyric_box.height;
+    // We also want a preview to show of the next 2 lines after the highlight.
+    let preview_lines = 2;
+    if line_to_focus > num_visible_lines - preview_lines - 1 {
+        *scroll_offset = (line_to_focus - num_visible_lines + preview_lines + 1) as usize;
     }
 
     // update the scroll offset so that it doesn't exceed the lyric's length
@@ -590,6 +607,11 @@ pub fn render_realtime_page(
         *scroll_offset = n_lines - 1;
     }
     let scroll_offset = *scroll_offset;
+
+    frame.render_widget(
+        Paragraph::new(cur_song_time_ms.to_string()),
+        *debug_box,
+    );
 
     // render lyric text
     frame.render_widget(

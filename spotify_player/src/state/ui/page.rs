@@ -21,6 +21,7 @@ pub enum PageState {
         track: String,
         artists: String,
         scroll_offset: usize,
+        currently_singing_lineno: Option<u16>,
         mode: LyricMode,
     },
     Browse {
@@ -31,6 +32,7 @@ pub enum PageState {
 #[derive(Clone, Debug)]
 pub enum LyricMode {
     SyncedView,
+    Seek { cursor: u16 },
 }
 
 pub enum PageType {

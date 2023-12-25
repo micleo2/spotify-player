@@ -309,23 +309,47 @@ pub fn handle_key_sequence_for_lyric_page(
     };
 
     let mut ui = state.ui.lock();
-    let scroll_offset = match ui.current_page_mut() {
+    let (scroll_offset, currently_singing_lineno, mode) = match ui.current_page_mut() {
         PageState::Lyric {
             ref mut scroll_offset,
+            ref mut currently_singing_lineno,
+            ref mut mode,
             ..
-        } => scroll_offset,
+        } => (scroll_offset, currently_singing_lineno, mode),
         _ => anyhow::bail!("expect a lyric page"),
     };
 
     match command {
-        Command::SelectNextOrScrollDown => {
-            *scroll_offset += 1;
-        }
-        Command::SelectPreviousOrScrollUp => {
-            if *scroll_offset > 0 {
-                *scroll_offset -= 1;
+        Command::SelectNextOrScrollDown => match mode {
+            LyricMode::SyncedView  => {
+                *mode = LyricMode::Seek {
+                    cursor: currently_singing_lineno.unwrap_or(0) + 1,
+                }
             }
-        }
+            LyricMode::Seek { ref mut cursor } => *cursor += 1,
+        },
+        Command::SelectPreviousOrScrollUp => match mode {
+            LyricMode::SyncedView  => {
+                *mode = LyricMode::Seek {
+                    cursor: if currently_singing_lineno.unwrap_or(0) > 0 {
+                        currently_singing_lineno.unwrap_or(0) - 1
+                    } else {
+                        0
+                    },
+                }
+            }
+            LyricMode::Seek { ref mut cursor } => {
+                if *cursor > 0 {
+                    *cursor -= 1;
+                }
+            }
+        },
+        Command::ClosePopup => match mode {
+            LyricMode::Seek { .. } => {
+                *mode = LyricMode::SyncedView;
+            }
+            _ => (),
+        },
         Command::PageSelectNextOrScrollDown => {
             *scroll_offset += state.configs.app_config.page_size_in_rows;
         }

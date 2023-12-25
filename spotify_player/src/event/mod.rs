@@ -420,7 +420,8 @@ fn handle_global_command(
                     track: track.name.clone(),
                     artists: artists.clone(),
                     scroll_offset: 0,
-                    mode: LyricMode::SyncedView,
+                    currently_singing_lineno: None,
+                    mode: LyricMode::SyncedView
                 });
 
                 if let Some(track_id) = &track.id {

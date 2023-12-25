@@ -201,6 +201,7 @@ pub async fn start_player_event_watchers(
                 artists,
                 scroll_offset,
                 mode,
+                ..
             } => {
                 if let Some(current_track) = state.player.read().current_playing_track() {
                     if current_track.name != *track {
@@ -209,6 +210,12 @@ pub async fn start_player_event_watchers(
                         *artists = map_join(&current_track.artists, |a| &a.name, ", ");
                         *scroll_offset = 0;
                         *mode = LyricMode::SyncedView;
+
+                        if let Some(track_id) = &current_track.id {
+                            client_pub
+                                .send(ClientRequest::GetRealtime(track_id.clone()))
+                                .unwrap_or_default();
+                        }
 
                         client_pub
                             .send(ClientRequest::GetLyric {
