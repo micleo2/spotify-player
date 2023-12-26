@@ -926,6 +926,17 @@ impl Client {
                 });
             }
         }
+        // If the first lyric doesn't start until 2 seconds into the song, insert a placeholder
+        // lyric.
+        if typed_res.lyrics[0].start_time_ms > 2000 {
+            typed_res.lyrics.insert(
+                0,
+                RealtimeLyric {
+                    words: "♪".to_string(),
+                    start_time_ms: 0,
+                },
+            )
+        }
         state.data.write().caches.realtimes.insert(
             track_id_str.to_string(),
             typed_res,
