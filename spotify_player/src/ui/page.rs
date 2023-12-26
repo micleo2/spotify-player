@@ -507,7 +507,7 @@ pub fn render_realtime_page(
     // 3. Construct the app's widgets
     let (track_id, scroll_offset, mode, currently_singing_lineno) = match ui.current_page_mut() {
         PageState::Lyric {
-            ref mut track_id,
+            track_id,
             scroll_offset,
             currently_singing_lineno,
             mode,
