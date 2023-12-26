@@ -517,7 +517,10 @@ pub fn render_realtime_page(
     };
 
     let player = state.player.read();
-    let cur_song_time_ms: i64 = player.playback_progress().unwrap_or(chrono::Duration::milliseconds(0)).num_milliseconds();
+    let cur_song_time_ms: i64 = player
+        .playback_progress()
+        .unwrap_or(chrono::Duration::milliseconds(0))
+        .num_milliseconds();
     if track_id.is_none() {
         frame.render_widget(Paragraph::new("No lyrics"), rect);
         return Ok(());

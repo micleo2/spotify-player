@@ -58,6 +58,7 @@ pub enum Command {
     LikedTrackPage,
     #[cfg(feature = "lyric-finder")]
     LyricPage,
+    CopySelectedLine,
     LibraryPage,
     SearchPage,
     BrowsePage,
@@ -245,6 +246,7 @@ impl Command {
             Self::LikedTrackPage => "go to the user liked track page",
             #[cfg(feature = "lyric-finder")]
             Self::LyricPage => "go to the lyric page of the current track",
+            Self::CopySelectedLine => "copy the selected line to the clipboard",
             Self::LibraryPage => "go to the user library page",
             Self::SearchPage => "go to the search page",
             Self::BrowsePage => "go to the browse page",

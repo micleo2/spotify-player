@@ -1,5 +1,3 @@
-use std::io::Write;
-
 use super::*;
 use crate::{
     command::{
@@ -8,6 +6,7 @@ use crate::{
     },
     config,
 };
+use crate::utils::execute_copy_command;
 use anyhow::Context;
 
 /// handles a key sequence for a popup
@@ -463,25 +462,6 @@ fn handle_command_for_command_help_popup(
     Ok(true)
 }
 
-fn execute_copy_command(cmd: &config::Command, text: String) -> Result<()> {
-    let mut child = std::process::Command::new(&cmd.command)
-        .args(&cmd.args)
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .spawn()?;
-
-    let result = match child.stdin.take() {
-        Some(mut stdin) => stdin
-            .write_all(text.as_bytes())
-            .map_err(anyhow::Error::from),
-        None => Err(anyhow::anyhow!("no stdin found in the child command")),
-    };
-
-    child.wait()?;
-
-    result
-}
-
 /// handles a key sequence for an action list popup
 fn handle_key_sequence_for_action_list_popup(
     n_actions: usize,
@@ -564,7 +544,7 @@ fn handle_nth_action(
             }
             TrackAction::CopyTrackLink => {
                 let track_url = format!("https://open.spotify.com/track/{}", track.id.id());
-                execute_copy_command(&state.configs.app_config.copy_command, track_url)?;
+                execute_copy_command(&state.configs.app_config.copy_command, &track_url)?;
                 ui.popup = None;
             }
             TrackAction::AddToPlaylist => {
@@ -650,7 +630,7 @@ fn handle_nth_action(
             }
             AlbumAction::CopyAlbumLink => {
                 let album_url = format!("https://open.spotify.com/album/{}", album.id.id());
-                execute_copy_command(&state.configs.app_config.copy_command, album_url)?;
+                execute_copy_command(&state.configs.app_config.copy_command, &album_url)?;
                 ui.popup = None;
             }
             AlbumAction::AddToLibrary => {
@@ -678,7 +658,7 @@ fn handle_nth_action(
             }
             ArtistAction::CopyArtistLink => {
                 let artist_url = format!("https://open.spotify.com/artist/{}", artist.id.id());
-                execute_copy_command(&state.configs.app_config.copy_command, artist_url)?;
+                execute_copy_command(&state.configs.app_config.copy_command, &artist_url)?;
                 ui.popup = None;
             }
             ArtistAction::Unfollow => {
@@ -703,7 +683,7 @@ fn handle_nth_action(
             PlaylistAction::CopyPlaylistLink => {
                 let playlist_url =
                     format!("https://open.spotify.com/playlist/{}", playlist.id.id());
-                execute_copy_command(&state.configs.app_config.copy_command, playlist_url)?;
+                execute_copy_command(&state.configs.app_config.copy_command, &playlist_url)?;
                 ui.popup = None;
             }
             PlaylistAction::DeleteFromLibrary => {

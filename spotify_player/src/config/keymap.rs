@@ -157,6 +157,10 @@ impl Default for KeymapConfig {
                     key_sequence: "g L".into(),
                     command: Command::LyricPage,
                 },
+                Keymap {
+                    key_sequence: "c".into(),
+                    command: Command::CopySelectedLine,
+                },
                 #[cfg(feature = "lyric-finder")]
                 Keymap {
                     key_sequence: "l".into(),

@@ -1,3 +1,4 @@
+use crate::utils::execute_copy_command;
 use anyhow::Context as _;
 
 use super::*;
@@ -402,6 +403,19 @@ pub fn handle_key_sequence_for_lyric_page(
                 *cursor = 1024;
             }
         },
+        Command::CopySelectedLine => {
+            let line_to_copy = match mode {
+                LyricMode::SyncedView => *currently_singing_lineno,
+                LyricMode::Seek { cursor } => Some(*cursor),
+            };
+            if let Some(line_to_copy) = line_to_copy {
+                if let Some(RealtimeLyrics { lyrics }) = cache_entry {
+                    let current_words = &lyrics[line_to_copy as usize].words;
+                    execute_copy_command(&state.configs.app_config.copy_command, current_words)?;
+                }
+            }
+            *mode = LyricMode::SyncedView;
+        }
         _ => return Ok(false),
     }
 

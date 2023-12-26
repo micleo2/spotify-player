@@ -1,6 +1,10 @@
 use std::borrow::Cow;
 
+use crate::config;
+use std::io::Write;
 use tui::widgets::*;
+
+use anyhow::Result;
 
 /// formats a time duration into a "{minutes}:{seconds}" format
 pub fn format_duration(duration: &chrono::Duration) -> String {
@@ -31,6 +35,20 @@ where
             x + sep + y
         }
     })
+}
+
+pub fn execute_copy_command(cmd: &config::Command, text: &String) -> Result<()> {
+    let mut child = std::process::Command::new(&cmd.command)
+        .args(&cmd.args)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()?;
+    let mut stdin = match child.stdin.take() {
+        Some(stdin) => stdin,
+        None => anyhow::bail!("no stdin found in the child command"),
+    };
+    stdin.write_all(text.as_bytes())?;
+    Ok(())
 }
 
 pub fn get_track_album_image_url(track: &rspotify::model::FullTrack) -> Option<&str> {
