@@ -19,6 +19,7 @@ pub enum PageState {
     #[cfg(feature = "lyric-finder")]
     Lyric {
         track: String,
+        track_id: Option<String>,
         artists: String,
         scroll_offset: usize,
         currently_singing_lineno: Option<u16>,

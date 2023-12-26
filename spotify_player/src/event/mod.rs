@@ -418,10 +418,11 @@ fn handle_global_command(
                 let artists = map_join(&track.artists, |a| &a.name, ", ");
                 ui.create_new_page(PageState::Lyric {
                     track: track.name.clone(),
+                    track_id: (|| Some(track.id.as_ref()?.id().to_string()))(),
                     artists: artists.clone(),
                     scroll_offset: 0,
                     currently_singing_lineno: None,
-                    mode: LyricMode::SyncedView
+                    mode: LyricMode::SyncedView,
                 });
 
                 if let Some(track_id) = &track.id {

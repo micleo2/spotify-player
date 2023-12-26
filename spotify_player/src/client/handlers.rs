@@ -198,6 +198,7 @@ pub async fn start_player_event_watchers(
             #[cfg(feature = "lyric-finder")]
             PageState::Lyric {
                 track,
+                track_id,
                 artists,
                 scroll_offset,
                 mode,
@@ -211,10 +212,13 @@ pub async fn start_player_event_watchers(
                         *scroll_offset = 0;
                         *mode = LyricMode::SyncedView;
 
-                        if let Some(track_id) = &current_track.id {
+                        if let Some(tid) = &current_track.id {
+                            *track_id = Some(tid.id().to_string());
                             client_pub
-                                .send(ClientRequest::GetRealtime(track_id.clone()))
+                                .send(ClientRequest::GetRealtime(tid.clone()))
                                 .unwrap_or_default();
+                        } else {
+                            *track_id = None;
                         }
 
                         client_pub

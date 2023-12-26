@@ -500,47 +500,39 @@ pub fn render_realtime_page(
     let rect = construct_and_render_block("Lyric", &ui.theme, state, Borders::ALL, frame, rect);
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(1), Constraint::Min(0)].as_ref())
+        .constraints([Constraint::Percentage(100)].as_ref())
         .split(rect);
-    let debug_box = &chunks[0];
-    let lyric_box = &chunks[1];
+    let lyric_box = &chunks[0];
 
     // 3. Construct the app's widgets
-    let (scroll_offset, mode, currently_singing_lineno) = match ui.current_page_mut() {
+    let (track_id, scroll_offset, mode, currently_singing_lineno) = match ui.current_page_mut() {
         PageState::Lyric {
+            ref mut track_id,
             scroll_offset,
             currently_singing_lineno,
             mode,
             ..
-        } => (scroll_offset, mode, currently_singing_lineno),
+        } => (track_id, scroll_offset, mode, currently_singing_lineno),
         s => anyhow::bail!("expect a lyric page state, found {s:?}"),
     };
 
-    let mut track_id: Option<String> = None;
     let player = state.player.read();
     let mut cur_song_time_ms: i64 = 0;
-    if let Some(ref playback) = player.playback {
-        if let Some(rspotify_model::PlayableItem::Track(ref track)) = playback.item {
-            if track.id.is_some() {
-                let _ = track_id.insert(track.id.as_ref().unwrap().id().to_string());
-            }
-            let progress = std::cmp::min(
-                player
-                    .playback_progress()
-                    .context("playback should exist")?,
-                track.duration,
-            );
-            cur_song_time_ms = progress.num_milliseconds();
-        }
+    if let Some(track) = player.current_playing_track() {
+        let progress = std::cmp::min(
+            player
+                .playback_progress()
+                .context("playback should exist")?,
+            track.duration,
+        );
+        cur_song_time_ms = progress.num_milliseconds();
     }
     if track_id.is_none() {
         frame.render_widget(Paragraph::new("No lyrics"), rect);
         return Ok(());
     }
 
-    let track_id_str: String = track_id.unwrap();
-
-    let cache_entry = data.caches.realtimes.get(&track_id_str);
+    let cache_entry = data.caches.realtimes.get(track_id.as_ref().unwrap());
     if cache_entry.is_none() {
         frame.render_widget(Paragraph::new("Loading..."), rect);
         return Ok(());
@@ -592,12 +584,13 @@ pub fn render_realtime_page(
         LyricMode::Seek { cursor } => *cursor,
     };
 
-    // Check if the current focused line is offscreen. If so, scroll the screen the exact amount to place
-    // the highlighted lyric at the bottom of the visible screen.
+    // Ensure the current focused line is onscreen, with some buffer space below/above it. Prefer to have the buffer provided below.
     let num_visible_lines = lyric_box.height;
-    // We also want a preview to show of the next 2 lines after the highlight.
     let preview_lines = 2;
-    if line_to_focus > num_visible_lines - preview_lines - 1 {
+    if line_to_focus.saturating_sub(preview_lines) < *scroll_offset as u16 {
+        *scroll_offset = line_to_focus.saturating_sub(preview_lines) as usize;
+    }
+    if line_to_focus + preview_lines > (num_visible_lines + *scroll_offset as u16) - 1 {
         *scroll_offset = (line_to_focus - num_visible_lines + preview_lines + 1) as usize;
     }
 
@@ -607,11 +600,6 @@ pub fn render_realtime_page(
         *scroll_offset = n_lines - 1;
     }
     let scroll_offset = *scroll_offset;
-
-    frame.render_widget(
-        Paragraph::new(cur_song_time_ms.to_string()),
-        *debug_box,
-    );
 
     // render lyric text
     frame.render_widget(

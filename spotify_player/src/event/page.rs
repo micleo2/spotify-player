@@ -308,41 +308,40 @@ pub fn handle_key_sequence_for_lyric_page(
         None => return Ok(false),
     };
 
+    let data = state.data.read();
     let mut ui = state.ui.lock();
-    let (scroll_offset, currently_singing_lineno, mode) = match ui.current_page_mut() {
+    let (track_id, scroll_offset, currently_singing_lineno, mode) = match ui.current_page_mut() {
         PageState::Lyric {
+            track_id,
             ref mut scroll_offset,
             ref mut currently_singing_lineno,
             ref mut mode,
             ..
-        } => (scroll_offset, currently_singing_lineno, mode),
+        } => (track_id, scroll_offset, currently_singing_lineno, mode),
         _ => anyhow::bail!("expect a lyric page"),
+    };
+    let cache_entry: Option<&RealtimeLyrics> = if let Some(track_id_str) = track_id {
+        data.caches.realtimes.get(track_id_str)
+    } else {
+        None
     };
 
     match command {
         Command::SelectNextOrScrollDown => match mode {
-            LyricMode::SyncedView  => {
+            LyricMode::SyncedView => {
                 *mode = LyricMode::Seek {
-                    cursor: currently_singing_lineno.unwrap_or(0) + 1,
+                    cursor: currently_singing_lineno.unwrap_or(0),
                 }
             }
             LyricMode::Seek { ref mut cursor } => *cursor += 1,
         },
         Command::SelectPreviousOrScrollUp => match mode {
-            LyricMode::SyncedView  => {
+            LyricMode::SyncedView => {
                 *mode = LyricMode::Seek {
-                    cursor: if currently_singing_lineno.unwrap_or(0) > 0 {
-                        currently_singing_lineno.unwrap_or(0) - 1
-                    } else {
-                        0
-                    },
+                    cursor: currently_singing_lineno.unwrap_or(0),
                 }
             }
-            LyricMode::Seek { ref mut cursor } => {
-                if *cursor > 0 {
-                    *cursor -= 1;
-                }
-            }
+            LyricMode::Seek { ref mut cursor } => *cursor = cursor.saturating_sub(1),
         },
         Command::ClosePopup => match mode {
             LyricMode::Seek { .. } => {
@@ -350,22 +349,72 @@ pub fn handle_key_sequence_for_lyric_page(
             }
             _ => (),
         },
-        Command::PageSelectNextOrScrollDown => {
-            *scroll_offset += state.configs.app_config.page_size_in_rows;
-        }
-        Command::PageSelectPreviousOrScrollUp => {
-            *scroll_offset =
-                scroll_offset.saturating_sub(state.configs.app_config.page_size_in_rows);
-        }
-        Command::SelectFirstOrScrollToTop => {
-            *scroll_offset = 0;
-        }
+        Command::ChooseSelected => match mode {
+            LyricMode::Seek { cursor } => {
+                if let Some(RealtimeLyrics { lyrics }) = cache_entry {
+                    let cursor_time_ms = lyrics[*cursor as usize].start_time_ms;
+                    let _ = _client_pub.send(ClientRequest::Player(PlayerRequest::SeekTrack(
+                        chrono::Duration::milliseconds(cursor_time_ms),
+                    )));
+                }
+                *mode = LyricMode::SyncedView;
+            }
+            _ => (),
+        },
+        Command::PageSelectNextOrScrollDown => match mode {
+            LyricMode::SyncedView => {
+                *mode = LyricMode::Seek {
+                    cursor: currently_singing_lineno.unwrap_or(0),
+                }
+            }
+            LyricMode::Seek { ref mut cursor } => {
+                *cursor += state.configs.app_config.page_size_in_rows as u16
+            }
+        },
+        Command::PageSelectPreviousOrScrollUp => match mode {
+            LyricMode::SyncedView => {
+                *mode = LyricMode::Seek {
+                    cursor: currently_singing_lineno.unwrap_or(0),
+                }
+            }
+            LyricMode::Seek { ref mut cursor } => {
+                *cursor = cursor.saturating_sub(state.configs.app_config.page_size_in_rows as u16)
+            }
+        },
+        Command::SelectFirstOrScrollToTop => match mode {
+            LyricMode::SyncedView => {
+                *mode = LyricMode::Seek {
+                    cursor: currently_singing_lineno.unwrap_or(0),
+                }
+            }
+            LyricMode::Seek { ref mut cursor } => {
+                *cursor = 0;
+            }
+        },
         // Don't know the number of rows of a lyric displayed in the page, so just use a "big" number.
         // The `scroll_offset` will be adjust accordingly in the page rendering function.
-        Command::SelectLastOrScrollToBottom => {
-            *scroll_offset = 1024;
-        }
+        Command::SelectLastOrScrollToBottom => match mode {
+            LyricMode::SyncedView => {
+                *mode = LyricMode::Seek {
+                    cursor: currently_singing_lineno.unwrap_or(0),
+                }
+            }
+            LyricMode::Seek { ref mut cursor } => {
+                *cursor = 1024;
+            }
+        },
         _ => return Ok(false),
+    }
+
+    if let Some(RealtimeLyrics { lyrics }) = cache_entry {
+        match mode {
+            LyricMode::Seek { ref mut cursor } => {
+                if *cursor > (lyrics.len() - 1) as u16 {
+                    *cursor = (lyrics.len() - 1) as u16;
+                }
+            }
+            _ => (),
+        }
     }
     Ok(true)
 }
