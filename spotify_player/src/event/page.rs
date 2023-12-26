@@ -310,14 +310,13 @@ pub fn handle_key_sequence_for_lyric_page(
 
     let data = state.data.read();
     let mut ui = state.ui.lock();
-    let (track_id, scroll_offset, currently_singing_lineno, mode) = match ui.current_page_mut() {
+    let (track_id, currently_singing_lineno, mode) = match ui.current_page_mut() {
         PageState::Lyric {
-            track_id,
-            ref mut scroll_offset,
+            ref mut track_id,
             ref mut currently_singing_lineno,
             ref mut mode,
             ..
-        } => (track_id, scroll_offset, currently_singing_lineno, mode),
+        } => (track_id, currently_singing_lineno, mode),
         _ => anyhow::bail!("expect a lyric page"),
     };
     let cache_entry: Option<&RealtimeLyrics> = if let Some(track_id_str) = track_id {

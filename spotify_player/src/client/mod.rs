@@ -915,8 +915,13 @@ impl Client {
         if synced_lyrics.is_array() {
             let lyrics_arr = synced_lyrics.as_array().unwrap();
             for elm in lyrics_arr {
+                let cur_word = elm["words"].as_str().unwrap();
                 typed_res.lyrics.push(RealtimeLyric {
-                    words: elm["words"].as_str().unwrap().to_owned(),
+                    words: if cur_word.is_empty() {
+                        "♪".to_string()
+                    } else {
+                        cur_word.to_owned()
+                    },
                     start_time_ms: elm["startTimeMs"].as_str().unwrap().parse().unwrap(),
                 });
             }

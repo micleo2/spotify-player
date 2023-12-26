@@ -517,16 +517,7 @@ pub fn render_realtime_page(
     };
 
     let player = state.player.read();
-    let mut cur_song_time_ms: i64 = 0;
-    if let Some(track) = player.current_playing_track() {
-        let progress = std::cmp::min(
-            player
-                .playback_progress()
-                .context("playback should exist")?,
-            track.duration,
-        );
-        cur_song_time_ms = progress.num_milliseconds();
-    }
+    let cur_song_time_ms: i64 = player.playback_progress().unwrap_or(chrono::Duration::milliseconds(0)).num_milliseconds();
     if track_id.is_none() {
         frame.render_widget(Paragraph::new("No lyrics"), rect);
         return Ok(());
