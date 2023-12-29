@@ -16,11 +16,11 @@ use librespot_core::session::Session;
 use rspotify::{http::Query, model::Market, prelude::*};
 
 mod handlers;
+mod realtime_lyrics;
 mod spotify;
 
 pub use handlers::*;
 use serde::Deserialize;
-use serde_json::Value;
 
 /// The application's client
 #[derive(Clone)]
@@ -905,41 +905,15 @@ impl Client {
         {
             return Ok(());
         }
-        let output = Command::new("./scripts/get_synced_lyrics.py")
-            .arg(track_id_str)
-            .output()?
-            .stdout;
-        let v: Value = serde_json::from_slice(&output)?;
-        let synced_lyrics = &v["lyrics"]["lines"];
-        let mut typed_res = RealtimeLyrics { lyrics: Vec::new() };
-        if synced_lyrics.is_array() {
-            let lyrics_arr = synced_lyrics.as_array().unwrap();
-            for elm in lyrics_arr {
-                let cur_word = elm["words"].as_str().unwrap();
-                typed_res.lyrics.push(RealtimeLyric {
-                    words: if cur_word.is_empty() {
-                        "♪".to_string()
-                    } else {
-                        cur_word.to_owned()
-                    },
-                    start_time_ms: elm["startTimeMs"].as_str().unwrap().parse().unwrap(),
-                });
-            }
-        }
-        // If the first lyric doesn't start until 2 seconds into the song, insert a placeholder
-        // lyric.
-        if typed_res.lyrics[0].start_time_ms > 2000 {
-            typed_res.lyrics.insert(
-                0,
-                RealtimeLyric {
-                    words: "♪".to_string(),
-                    start_time_ms: 0,
-                },
-            )
-        }
+
+        let mut rt_client = realtime_lyrics::RealtimeLyricsClient::new(&self.http, "".to_string()).await?;
+        let lyric_data_response = rt_client
+            .get_lyrics(&self.http, track_id_str.to_string())
+            .await?;
+
         state.data.write().caches.realtimes.insert(
             track_id_str.to_string(),
-            typed_res,
+            lyric_data_response,
             *TTL_CACHE_DURATION,
         );
         Ok(())
