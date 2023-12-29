@@ -3,45 +3,28 @@ use anyhow::{Context, Result};
 use rspotify::http::Query;
 use serde_json::Value;
 use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const GET_TOKEN_URL: &str = "https://open.spotify.com/get_access_token";
 
+#[derive(Clone)]
 pub struct RealtimeLyricsClient {
     sp_dc_cookie: String,
-    access_token: LyricToken,
+    access_token: Option<LyricToken>,
 }
 
+#[derive(Clone)]
 pub struct LyricToken {
     value: String,
-    expiration_time_ms: u64,
+    expiration_time_ms: u128,
 }
 
 impl RealtimeLyricsClient {
-    pub async fn new(http: &reqwest::Client, sp_dc_cookie: String) -> Result<Self> {
-        let response = http
-            .get(GET_TOKEN_URL)
-            .header("User-Agent", "reqwest")
-            .header("app-platform", "WebPlayer")
-            .header("Cookie", format!("sp_dc={sp_dc_cookie}"))
-            .send()
-            .await?
-            .text()
-            .await?;
-        let parsed_response: Value = serde_json::from_str(&response)?;
-        let access_token_val = parsed_response["accessToken"]
-            .as_str()
-            .context("missing accessToken")?
-            .to_string();
-        let expiration_time_ms = parsed_response["accessTokenExpirationTimestampMs"]
-            .as_i64()
-            .context("missing accessTokenExpirationTimestampMs")?
-            as u64;
+    pub async fn new(sp_dc_cookie: String) -> Result<Self> {
         Ok(RealtimeLyricsClient {
             sp_dc_cookie,
-            access_token: LyricToken {
-                value: access_token_val,
-                expiration_time_ms,
-            },
+            // access token is lazily created.
+            access_token: None,
         })
     }
 
@@ -50,14 +33,18 @@ impl RealtimeLyricsClient {
         http: &reqwest::Client,
         track_id_str: String,
     ) -> Result<RealtimeLyrics> {
-        self.ensure_valid_token().await?;
+        self.ensure_valid_token(http).await?;
+        let token_str = &(self
+            .access_token
+            .as_ref()
+            .context("no acccess token set")?
+            .value);
 
         let url = format!("https://spclient.wg.spotify.com/color-lyrics/v2/track/{track_id_str}");
         let mut payload = Query::with_capacity(3);
         payload.insert("market", "from_token");
         payload.insert("format", "json");
         payload.insert("vocalRemoval", "false");
-        let token_str = &self.access_token.value;
         let raw_response_str = http
             .get(url.clone())
             .header(
@@ -107,7 +94,46 @@ impl RealtimeLyricsClient {
         Ok(typed_res)
     }
 
-    async fn ensure_valid_token(&mut self) -> Result<()> {
+    async fn ensure_valid_token(&mut self, http: &reqwest::Client) -> Result<()> {
+        if self.access_token.is_none() {
+            self.access_token = Some(self.fetch_token(http).await?);
+            return Ok(());
+        }
+        let time_in_ms = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards")
+            .as_millis();
+        if time_in_ms > self.access_token.as_ref().unwrap().expiration_time_ms {
+            let _ = fs::write("./temp_log.txt", "updating!");
+            self.access_token = Some(self.fetch_token(http).await?);
+            return Ok(());
+        }
         Ok(())
+    }
+
+    async fn fetch_token(&self, http: &reqwest::Client) -> Result<LyricToken> {
+        let cookie_val = &self.sp_dc_cookie;
+        let response = http
+            .get(GET_TOKEN_URL)
+            .header("User-Agent", "reqwest")
+            .header("app-platform", "WebPlayer")
+            .header("Cookie", format!("sp_dc={cookie_val}"))
+            .send()
+            .await?
+            .text()
+            .await?;
+        let parsed_response: Value = serde_json::from_str(&response)?;
+        let access_token_val = parsed_response["accessToken"]
+            .as_str()
+            .context("missing accessToken")?
+            .to_string();
+        let expiration_time_ms = parsed_response["accessTokenExpirationTimestampMs"]
+            .as_i64()
+            .context("missing accessTokenExpirationTimestampMs")?
+            as u128;
+        Ok(LyricToken {
+            value: access_token_val,
+            expiration_time_ms,
+        })
     }
 }

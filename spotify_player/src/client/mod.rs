@@ -20,6 +20,7 @@ mod realtime_lyrics;
 mod spotify;
 
 pub use handlers::*;
+use realtime_lyrics::RealtimeLyricsClient;
 use serde::Deserialize;
 
 /// The application's client
@@ -30,6 +31,7 @@ pub struct Client {
     pub client_pub: flume::Sender<ClientRequest>,
     #[cfg(feature = "streaming")]
     stream_conn: Arc<Mutex<Option<Spirc>>>,
+    lyric_client: Option<RealtimeLyricsClient>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -56,6 +58,7 @@ impl Client {
             #[cfg(feature = "streaming")]
             stream_conn: Arc::new(Mutex::new(None)),
             client_pub,
+            lyric_client: None,
         }
     }
 
@@ -101,8 +104,9 @@ impl Client {
     }
 
     /// initializes the authentication token inside the Spotify client
-    pub async fn init_token(&self) -> Result<()> {
+    pub async fn init_token(&mut self) -> Result<()> {
         self.spotify.refresh_token().await?;
+        self.lyric_client = Some(realtime_lyrics::RealtimeLyricsClient::new("".to_string()).await?);
         Ok(())
     }
 
@@ -215,7 +219,11 @@ impl Client {
     }
 
     /// handles a client request
-    pub async fn handle_request(&self, state: &SharedState, request: ClientRequest) -> Result<()> {
+    pub async fn handle_request(
+        &mut self,
+        state: &SharedState,
+        request: ClientRequest,
+    ) -> Result<()> {
         let timer = std::time::SystemTime::now();
 
         match request {
@@ -894,7 +902,7 @@ impl Client {
     }
 
     /// Get timestamped lyrics
-    pub async fn get_realtime(&self, state: &SharedState, track_id: TrackId<'_>) -> Result<()> {
+    pub async fn get_realtime(&mut self, state: &SharedState, track_id: TrackId<'_>) -> Result<()> {
         let track_id_str: &str = &track_id.id().to_string();
         if state
             .data
@@ -906,8 +914,10 @@ impl Client {
             return Ok(());
         }
 
-        let mut rt_client = realtime_lyrics::RealtimeLyricsClient::new(&self.http, "".to_string()).await?;
-        let lyric_data_response = rt_client
+        let lyric_data_response = self
+            .lyric_client
+            .as_mut()
+            .unwrap()
             .get_lyrics(&self.http, track_id_str.to_string())
             .await?;
 

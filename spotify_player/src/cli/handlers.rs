@@ -159,7 +159,7 @@ fn try_connect_to_client(socket: &UdpSocket, configs: &state::Configs) -> Result
             let session = rt.block_on(new_session(&auth_config, false))?;
 
             // create a Spotify API client
-            let client = client::Client::new(
+            let mut client = client::Client::new(
                 session,
                 auth_config,
                 configs.app_config.client_id.clone(),
