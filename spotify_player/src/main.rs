@@ -133,7 +133,7 @@ async fn start_app(state: state::SharedState, is_daemon: bool) -> Result<()> {
     let session = auth::new_session(&auth_config, !is_daemon).await?;
 
     // create a Spotify API client
-    let mut client = client::Client::new(
+    let client = client::Client::new(
         session,
         auth_config,
         state.configs.app_config.client_id.clone(),

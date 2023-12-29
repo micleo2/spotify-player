@@ -20,12 +20,12 @@ pub struct LyricToken {
 }
 
 impl RealtimeLyricsClient {
-    pub async fn new(sp_dc_cookie: String) -> Result<Self> {
-        Ok(RealtimeLyricsClient {
+    pub fn new(sp_dc_cookie: String) -> Self {
+        RealtimeLyricsClient {
             sp_dc_cookie,
             // access token is lazily created.
             access_token: None,
-        })
+        }
     }
 
     pub async fn get_lyrics(

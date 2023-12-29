@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, io::Write, process::Command, sync::Arc};
+use std::{borrow::Cow, collections::HashMap, io::Write, sync::Arc};
 
 #[cfg(feature = "streaming")]
 use crate::streaming;
@@ -58,7 +58,7 @@ impl Client {
             #[cfg(feature = "streaming")]
             stream_conn: Arc::new(Mutex::new(None)),
             client_pub,
-            lyric_client: None,
+            lyric_client: Some(realtime_lyrics::RealtimeLyricsClient::new("".to_string())),
         }
     }
 
@@ -104,9 +104,8 @@ impl Client {
     }
 
     /// initializes the authentication token inside the Spotify client
-    pub async fn init_token(&mut self) -> Result<()> {
+    pub async fn init_token(&self) -> Result<()> {
         self.spotify.refresh_token().await?;
-        self.lyric_client = Some(realtime_lyrics::RealtimeLyricsClient::new("".to_string()).await?);
         Ok(())
     }
 
