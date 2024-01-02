@@ -163,6 +163,7 @@ fn try_connect_to_client(socket: &UdpSocket, configs: &state::Configs) -> Result
                 session,
                 auth_config,
                 configs.app_config.client_id.clone(),
+                configs.app_config.sp_dc_cookie.clone(),
                 client_pub,
             );
             rt.block_on(client.init_token())?;

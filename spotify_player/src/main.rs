@@ -137,6 +137,7 @@ async fn start_app(state: state::SharedState, is_daemon: bool) -> Result<()> {
         session,
         auth_config,
         state.configs.app_config.client_id.clone(),
+        state.configs.app_config.sp_dc_cookie.clone(),
         client_pub.clone(),
     );
     client.init_token().await?;

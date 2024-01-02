@@ -589,7 +589,7 @@ pub fn render_realtime_page(
     }
 
     // update the scroll offset so that it doesn't exceed the lyric's length
-    let n_lines = lyrics.len() - 1;
+    let n_lines = lyrics.len();
     if *scroll_offset >= n_lines {
         *scroll_offset = n_lines - 1;
     }

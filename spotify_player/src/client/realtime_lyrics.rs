@@ -2,7 +2,6 @@ use crate::state::*;
 use anyhow::{Context, Result};
 use rspotify::http::Query;
 use serde_json::Value;
-use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const GET_TOKEN_URL: &str = "https://open.spotify.com/get_access_token";
@@ -33,6 +32,14 @@ impl RealtimeLyricsClient {
         http: &reqwest::Client,
         track_id_str: String,
     ) -> Result<RealtimeLyrics> {
+        if self.sp_dc_cookie.is_empty() {
+            return Ok(RealtimeLyrics {
+                lyrics: vec![RealtimeLyric {
+                    words: "Missing sp_dc_cookie".to_string(),
+                    start_time_ms: 0,
+                }],
+            });
+        }
         self.ensure_valid_token(http).await?;
         let token_str = &(self
             .access_token
@@ -104,7 +111,6 @@ impl RealtimeLyricsClient {
             .expect("Time went backwards")
             .as_millis();
         if time_in_ms > self.access_token.as_ref().unwrap().expiration_time_ms {
-            let _ = fs::write("./temp_log.txt", "updating!");
             self.access_token = Some(self.fetch_token(http).await?);
             return Ok(());
         }

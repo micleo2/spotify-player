@@ -22,6 +22,7 @@ pub use theme::*;
 pub struct AppConfig {
     pub theme: String,
     pub client_id: String,
+    pub sp_dc_cookie: String,
 
     pub client_port: u16,
 
@@ -175,6 +176,8 @@ impl Default for AppConfig {
             client_id: "65b708073fc0480ea92a077233ca87bd".to_string(),
 
             client_port: 8080,
+
+            sp_dc_cookie: "".to_string(),
 
             tracks_playback_limit: 50,
 

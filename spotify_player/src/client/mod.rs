@@ -50,6 +50,7 @@ impl Client {
         session: Session,
         auth_config: AuthConfig,
         client_id: String,
+        sp_dc_cookie: String,
         client_pub: flume::Sender<ClientRequest>,
     ) -> Self {
         Self {
@@ -58,7 +59,7 @@ impl Client {
             #[cfg(feature = "streaming")]
             stream_conn: Arc::new(Mutex::new(None)),
             client_pub,
-            lyric_client: Some(realtime_lyrics::RealtimeLyricsClient::new("".to_string())),
+            lyric_client: Some(realtime_lyrics::RealtimeLyricsClient::new(sp_dc_cookie)),
         }
     }
 
