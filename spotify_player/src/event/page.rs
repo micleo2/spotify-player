@@ -439,22 +439,17 @@ pub fn handle_key_sequence_for_lyric_page(
         _ => return Ok(false),
     }
 
-    let upper_bound: Option<u16> = match cur_lyrics {
-        LyricResults::Synced { lyrics } => Some((lyrics.len() - 1) as u16),
-        LyricResults::UnSynced { lyrics } => Some((lyrics.len() - 1) as u16),
+    let upper_bound: u16 = match cur_lyrics {
+        LyricResults::Synced { lyrics } => (lyrics.len() - 1) as u16,
+        LyricResults::UnSynced { lyrics } => (lyrics.len() - 1) as u16,
         _ => panic!("impossible"),
     };
     match mode {
-        LyricMode::Seek { ref mut cursor } => match upper_bound {
-            Some(upper_bound) => {
-                if *cursor > upper_bound {
-                    *cursor = upper_bound;
-                }
+        LyricMode::Seek { ref mut cursor } => {
+            if *cursor > upper_bound {
+                *cursor = upper_bound;
             }
-            None => {
-                *cursor = 0;
-            }
-        },
+        }
         _ => (),
     }
 
