@@ -532,52 +532,72 @@ pub fn render_realtime_page(
         return Ok(());
     }
 
-    let RealtimeLyrics { lyrics } = cache_entry.unwrap();
+    let lyrics_len: usize;
     let mut formatted_lines = vec![];
-    for i in 0..lyrics.len() {
-        let i16 = i as u16;
-        let RealtimeLyric {
-            words,
-            start_time_ms,
-        } = &lyrics[i];
+    match cache_entry.unwrap() {
+        LyricResults::Synced { lyrics } => {
+            lyrics_len = lyrics.len();
+            for i in 0..lyrics.len() {
+                let i16 = i as u16;
+                let SyncedLyric {
+                    words,
+                    start_time_ms,
+                } = &lyrics[i];
 
-        let mut is_highlighted_line = false;
-        if cur_song_time_ms > *start_time_ms {
-            if i < lyrics.len() - 1 {
-                let next_start_time_ms = lyrics[i + 1].start_time_ms;
-                if cur_song_time_ms > *start_time_ms && cur_song_time_ms < next_start_time_ms {
-                    is_highlighted_line = true;
-                    *currently_singing_lineno = Some(i16);
+                let mut is_highlighted_line = false;
+                if cur_song_time_ms > *start_time_ms {
+                    if i < lyrics.len() - 1 {
+                        let next_start_time_ms = lyrics[i + 1].start_time_ms;
+                        if cur_song_time_ms > *start_time_ms
+                            && cur_song_time_ms < next_start_time_ms
+                        {
+                            is_highlighted_line = true;
+                            *currently_singing_lineno = Some(i16);
+                        }
+                    } else {
+                        is_highlighted_line = true;
+                        *currently_singing_lineno = Some(i16);
+                    }
                 }
-            } else {
-                is_highlighted_line = true;
-                *currently_singing_lineno = Some(i16);
+
+                let mut text_style = if is_highlighted_line {
+                    Style::default().fg(Color::Red)
+                } else {
+                    Style::default()
+                };
+
+                if let LyricMode::Seek { cursor } = mode {
+                    if *cursor == i16 {
+                        text_style = text_style
+                            .add_modifier(Modifier::REVERSED)
+                            .add_modifier(Modifier::BOLD);
+                    }
+                }
+
+                // Note- lines are not wrapped.
+                formatted_lines.push(Line::from(vec![Span::styled(words, text_style)]));
             }
         }
-
-        let mut text_style = if is_highlighted_line {
-            Style::default().fg(Color::Red)
-        } else {
-            Style::default()
-        };
-
-        if let LyricMode::Seek { cursor } = mode {
-            if *cursor == i16 {
-                text_style = text_style
-                    .add_modifier(Modifier::REVERSED)
-                    .add_modifier(Modifier::BOLD);
+        LyricResults::UnSynced { lyrics } => {
+            lyrics_len = lyrics.len();
+            for (idx, words) in lyrics.iter().enumerate() {
+                let mut text_style = Style::default();
+                if let LyricMode::Seek { cursor } = mode {
+                    if *cursor == idx as u16 {
+                        text_style = text_style
+                            .add_modifier(Modifier::REVERSED)
+                            .add_modifier(Modifier::BOLD);
+                    }
+                }
+                formatted_lines.push(Line::from(vec![Span::styled(words, text_style)]));
             }
         }
-
-        // Note- lines are not wrapped.
-        formatted_lines.push(Line::from(vec![Span::styled(words, text_style)]));
     }
 
     let line_to_focus = match mode {
         LyricMode::SyncedView => currently_singing_lineno.unwrap_or(0),
         LyricMode::Seek { cursor } => *cursor,
     };
-
     // Ensure the current focused line is onscreen, with some buffer space below/above it. Prefer to have the buffer provided below.
     let num_visible_lines = lyric_box.height;
     let preview_lines = 2;
@@ -589,13 +609,14 @@ pub fn render_realtime_page(
     }
 
     // update the scroll offset so that it doesn't exceed the lyric's length
-    let n_lines = lyrics.len();
+    let n_lines = lyrics_len;
     if *scroll_offset >= n_lines {
         *scroll_offset = n_lines - 1;
     }
     let scroll_offset = *scroll_offset;
 
     // render lyric text
+    // Note- lines are not wrapped.
     frame.render_widget(
         Paragraph::new(formatted_lines).scroll((scroll_offset as u16, 0)),
         *lyric_box,

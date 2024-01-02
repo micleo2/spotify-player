@@ -320,7 +320,7 @@ pub fn handle_key_sequence_for_lyric_page(
         } => (track_id, currently_singing_lineno, mode),
         _ => anyhow::bail!("expect a lyric page"),
     };
-    let cache_entry: Option<&RealtimeLyrics> = if let Some(track_id_str) = track_id {
+    let cache_entry: Option<&LyricResults> = if let Some(track_id_str) = track_id {
         data.caches.realtimes.get(track_id_str)
     } else {
         None
@@ -351,13 +351,13 @@ pub fn handle_key_sequence_for_lyric_page(
         },
         Command::ChooseSelected => match mode {
             LyricMode::Seek { cursor } => {
-                if let Some(RealtimeLyrics { lyrics }) = cache_entry {
+                if let Some(LyricResults::Synced { ref lyrics }) = cache_entry {
                     let cursor_time_ms = lyrics[*cursor as usize].start_time_ms;
                     let _ = _client_pub.send(ClientRequest::Player(PlayerRequest::SeekTrack(
                         chrono::Duration::milliseconds(cursor_time_ms),
                     )));
+                    *mode = LyricMode::SyncedView;
                 }
-                *mode = LyricMode::SyncedView;
             }
             _ => (),
         },
@@ -409,9 +409,22 @@ pub fn handle_key_sequence_for_lyric_page(
                 LyricMode::Seek { cursor } => Some(*cursor),
             };
             if let Some(line_to_copy) = line_to_copy {
-                if let Some(RealtimeLyrics { lyrics }) = cache_entry {
-                    let current_words = &lyrics[line_to_copy as usize].words;
-                    execute_copy_command(&state.configs.app_config.copy_command, current_words)?;
+                match cache_entry {
+                    Some(LyricResults::Synced { lyrics }) => {
+                        let current_words = &lyrics[line_to_copy as usize].words;
+                        execute_copy_command(
+                            &state.configs.app_config.copy_command,
+                            current_words,
+                        )?;
+                    }
+                    Some(LyricResults::UnSynced { lyrics }) => {
+                        let current_words = &lyrics[line_to_copy as usize];
+                        execute_copy_command(
+                            &state.configs.app_config.copy_command,
+                            current_words,
+                        )?;
+                    }
+                    _ => (),
                 }
             }
             *mode = LyricMode::SyncedView;
@@ -419,15 +432,23 @@ pub fn handle_key_sequence_for_lyric_page(
         _ => return Ok(false),
     }
 
-    if let Some(RealtimeLyrics { lyrics }) = cache_entry {
-        match mode {
-            LyricMode::Seek { ref mut cursor } => {
-                if *cursor > (lyrics.len() - 1) as u16 {
-                    *cursor = (lyrics.len() - 1) as u16;
+    let upper_bound: Option<u16> = match cache_entry {
+        Some(LyricResults::Synced { lyrics }) => Some(lyrics.len() as u16),
+        Some(LyricResults::UnSynced { lyrics }) => Some(lyrics.len() as u16),
+        _ => None,
+    };
+    match mode {
+        LyricMode::Seek { ref mut cursor } => match upper_bound {
+            Some(upper_bound) => {
+                if *cursor > upper_bound {
+                    *cursor = upper_bound;
                 }
             }
-            _ => (),
-        }
+            None => {
+                *cursor = 0;
+            }
+        },
+        _ => (),
     }
     Ok(true)
 }

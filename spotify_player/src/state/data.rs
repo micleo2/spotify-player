@@ -40,7 +40,7 @@ pub struct UserData {
 pub struct MemoryCaches {
     pub context: ttl_cache::TtlCache<String, Context>,
     pub search: ttl_cache::TtlCache<String, SearchResults>,
-    pub realtimes: ttl_cache::TtlCache<String, RealtimeLyrics>,
+    pub realtimes: ttl_cache::TtlCache<String, LyricResults>,
     #[cfg(feature = "lyric-finder")]
     pub lyrics: ttl_cache::TtlCache<String, lyric_finder::LyricResult>,
     #[cfg(feature = "image")]

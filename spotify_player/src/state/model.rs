@@ -66,15 +66,21 @@ pub struct SearchResults {
     pub playlists: Vec<Playlist>,
 }
 
-#[derive(Default, Clone, Debug)]
-pub struct RealtimeLyrics {
-    pub lyrics: Vec<RealtimeLyric>,
+#[derive(Clone, Debug)]
+pub enum LyricResults {
+    Synced { lyrics: Vec<SyncedLyric> },
+    UnSynced { lyrics: Vec<String> },
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct RealtimeLyric {
+pub struct SyncedLyric {
     pub words: String,
     pub start_time_ms: i64,
+}
+
+#[derive(Clone, Debug)]
+pub struct UnSyncedLyric {
+    pub words: String,
 }
 
 #[derive(Debug)]

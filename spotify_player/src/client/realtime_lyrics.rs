@@ -31,13 +31,10 @@ impl RealtimeLyricsClient {
         &mut self,
         http: &reqwest::Client,
         track_id_str: String,
-    ) -> Result<RealtimeLyrics> {
+    ) -> Result<LyricResults> {
         if self.sp_dc_cookie.is_empty() {
-            return Ok(RealtimeLyrics {
-                lyrics: vec![RealtimeLyric {
-                    words: "Missing sp_dc_cookie".to_string(),
-                    start_time_ms: 0,
-                }],
+            return Ok(LyricResults::UnSynced {
+                lyrics: vec!["Missing sp_dc_cookie".to_string()],
             });
         }
         self.ensure_valid_token(http).await?;
@@ -52,7 +49,7 @@ impl RealtimeLyricsClient {
         payload.insert("market", "from_token");
         payload.insert("format", "json");
         payload.insert("vocalRemoval", "false");
-        let raw_response_str = http
+        let response = http
             .get(url.clone())
             .header(
                 reqwest::header::AUTHORIZATION,
@@ -61,19 +58,28 @@ impl RealtimeLyricsClient {
             .header("app-platform", "WebPlayer")
             .query(&payload)
             .send()
-            .await?
-            .text()
-            .await?
-            .to_string();
+            .await?;
 
+        if response.status() != 200 {
+            return Ok(LyricResults::UnSynced {
+                lyrics: vec!["No lyrics for this song".to_string()],
+            });
+        }
+
+        let raw_response_str = response.text().await?.to_string();
         let v: Value = serde_json::from_str(&raw_response_str)?;
-        let synced_lyrics = &v["lyrics"]["lines"];
-        let mut typed_res = RealtimeLyrics { lyrics: Vec::new() };
-        if synced_lyrics.is_array() {
-            let lyrics_arr = synced_lyrics.as_array().context("no lyrics array")?;
+        let is_synced = v["lyrics"]["syncType"]
+            .as_str()
+            .context("Missing lyric type data")?
+            == "LINE_SYNCED";
+        let lyrics_arr = v["lyrics"]["lines"]
+            .as_array()
+            .context("Missing lyric data.")?;
+        if is_synced {
+            let mut lyric_res: Vec<SyncedLyric> = Vec::new();
             for elm in lyrics_arr {
                 let cur_word = elm["words"].as_str().context("no words property")?;
-                typed_res.lyrics.push(RealtimeLyric {
+                lyric_res.push(SyncedLyric {
                     words: if cur_word.is_empty() {
                         "♪".to_string()
                     } else {
@@ -86,19 +92,30 @@ impl RealtimeLyricsClient {
                         .unwrap(),
                 });
             }
+            // If the first lyric doesn't start until 2 seconds into the song, insert a placeholder
+            // lyric.
+            if lyric_res[0].start_time_ms > 2000 {
+                lyric_res.insert(
+                    0,
+                    SyncedLyric {
+                        words: "♪".to_string(),
+                        start_time_ms: 0,
+                    },
+                )
+            }
+            Ok(LyricResults::Synced { lyrics: lyric_res })
+        } else {
+            let mut lyric_res: Vec<String> = Vec::new();
+            for elm in lyrics_arr {
+                let cur_word = elm["words"].as_str().context("no words property")?;
+                lyric_res.push(if cur_word.is_empty() {
+                    "♪".to_string()
+                } else {
+                    cur_word.to_owned()
+                });
+            }
+            Ok(LyricResults::UnSynced { lyrics: lyric_res })
         }
-        // If the first lyric doesn't start until 2 seconds into the song, insert a placeholder
-        // lyric.
-        if typed_res.lyrics[0].start_time_ms > 2000 {
-            typed_res.lyrics.insert(
-                0,
-                RealtimeLyric {
-                    words: "♪".to_string(),
-                    start_time_ms: 0,
-                },
-            )
-        }
-        Ok(typed_res)
     }
 
     async fn ensure_valid_token(&mut self, http: &reqwest::Client) -> Result<()> {
