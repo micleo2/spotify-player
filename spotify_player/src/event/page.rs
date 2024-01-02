@@ -440,8 +440,8 @@ pub fn handle_key_sequence_for_lyric_page(
     }
 
     let upper_bound: Option<u16> = match cur_lyrics {
-        LyricResults::Synced { lyrics } => Some(lyrics.len() as u16),
-        LyricResults::UnSynced { lyrics } => Some(lyrics.len() as u16),
+        LyricResults::Synced { lyrics } => Some((lyrics.len() - 1) as u16),
+        LyricResults::UnSynced { lyrics } => Some((lyrics.len() - 1) as u16),
         _ => panic!("impossible"),
     };
     match mode {
