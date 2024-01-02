@@ -34,7 +34,7 @@ impl RealtimeLyricsClient {
     ) -> Result<LyricResults> {
         if self.sp_dc_cookie.is_empty() {
             return Ok(LyricResults::Failure {
-                reason: "Missing sp_dc_cookie".to_string(),
+                reason: "Missing sp_dc_cookie in app.toml".to_string(),
             });
         }
         self.ensure_valid_token(http).await?;
