@@ -70,6 +70,7 @@ pub struct SearchResults {
 pub enum LyricResults {
     Synced { lyrics: Vec<SyncedLyric> },
     UnSynced { lyrics: Vec<String> },
+    Failure { reason: String },
 }
 
 #[derive(Default, Clone, Debug)]

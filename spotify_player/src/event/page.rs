@@ -320,10 +320,17 @@ pub fn handle_key_sequence_for_lyric_page(
         } => (track_id, currently_singing_lineno, mode),
         _ => anyhow::bail!("expect a lyric page"),
     };
-    let cache_entry: Option<&LyricResults> = if let Some(track_id_str) = track_id {
-        data.caches.realtimes.get(track_id_str)
+
+    // We only want to process key presses if there is valid lyric data onscreen.
+    let cur_lyrics: &LyricResults = if let Some(track_id_str) = track_id {
+        let cache_entry = data.caches.realtimes.get(track_id_str);
+        match cache_entry {
+            Some(LyricResults::Failure { .. }) => return Ok(false),
+            None => return Ok(false),
+            _ => cache_entry.unwrap(),
+        }
     } else {
-        None
+        return Ok(false);
     };
 
     match command {
@@ -351,7 +358,7 @@ pub fn handle_key_sequence_for_lyric_page(
         },
         Command::ChooseSelected => match mode {
             LyricMode::Seek { cursor } => {
-                if let Some(LyricResults::Synced { ref lyrics }) = cache_entry {
+                if let LyricResults::Synced { ref lyrics } = cur_lyrics {
                     let cursor_time_ms = lyrics[*cursor as usize].start_time_ms;
                     let _ = _client_pub.send(ClientRequest::Player(PlayerRequest::SeekTrack(
                         chrono::Duration::milliseconds(cursor_time_ms),
@@ -409,22 +416,22 @@ pub fn handle_key_sequence_for_lyric_page(
                 LyricMode::Seek { cursor } => Some(*cursor),
             };
             if let Some(line_to_copy) = line_to_copy {
-                match cache_entry {
-                    Some(LyricResults::Synced { lyrics }) => {
+                match cur_lyrics {
+                    LyricResults::Synced { lyrics } => {
                         let current_words = &lyrics[line_to_copy as usize].words;
                         execute_copy_command(
                             &state.configs.app_config.copy_command,
                             current_words,
                         )?;
                     }
-                    Some(LyricResults::UnSynced { lyrics }) => {
+                    LyricResults::UnSynced { lyrics } => {
                         let current_words = &lyrics[line_to_copy as usize];
                         execute_copy_command(
                             &state.configs.app_config.copy_command,
                             current_words,
                         )?;
                     }
-                    _ => (),
+                    _ => panic!("impossible"),
                 }
             }
             *mode = LyricMode::SyncedView;
@@ -432,10 +439,10 @@ pub fn handle_key_sequence_for_lyric_page(
         _ => return Ok(false),
     }
 
-    let upper_bound: Option<u16> = match cache_entry {
-        Some(LyricResults::Synced { lyrics }) => Some(lyrics.len() as u16),
-        Some(LyricResults::UnSynced { lyrics }) => Some(lyrics.len() as u16),
-        _ => None,
+    let upper_bound: Option<u16> = match cur_lyrics {
+        LyricResults::Synced { lyrics } => Some(lyrics.len() as u16),
+        LyricResults::UnSynced { lyrics } => Some(lyrics.len() as u16),
+        _ => panic!("impossible"),
     };
     match mode {
         LyricMode::Seek { ref mut cursor } => match upper_bound {
@@ -450,5 +457,6 @@ pub fn handle_key_sequence_for_lyric_page(
         },
         _ => (),
     }
+
     Ok(true)
 }

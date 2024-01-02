@@ -493,18 +493,9 @@ pub fn render_realtime_page(
     ui: &mut UIStateGuard,
     rect: Rect,
 ) -> Result<()> {
-    // 1. Get the data
     let data = state.data.read();
+    let theme = ui.theme.clone();
 
-    // 2. Construct the app's layout
-    let rect = construct_and_render_block("Lyric", &ui.theme, state, Borders::ALL, frame, rect);
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Percentage(100)].as_ref())
-        .split(rect);
-    let lyric_box = &chunks[0];
-
-    // 3. Construct the app's widgets
     let (track_id, scroll_offset, mode, currently_singing_lineno) = match ui.current_page_mut() {
         PageState::Lyric {
             track_id,
@@ -528,6 +519,7 @@ pub fn render_realtime_page(
 
     let cache_entry = data.caches.realtimes.get(track_id.as_ref().unwrap());
     if cache_entry.is_none() {
+        let rect = construct_and_render_block("Lyrics", &theme, state, Borders::ALL, frame, rect);
         frame.render_widget(Paragraph::new("Loading..."), rect);
         return Ok(());
     }
@@ -592,7 +584,25 @@ pub fn render_realtime_page(
                 formatted_lines.push(Line::from(vec![Span::styled(words, text_style)]));
             }
         }
+        LyricResults::Failure { ref reason } => {
+            let rect =
+                construct_and_render_block("Lyrics", &theme, state, Borders::ALL, frame, rect);
+            frame.render_widget(Paragraph::new(reason.clone()), rect);
+            return Ok(());
+        }
     }
+
+    let title = match cache_entry.unwrap() {
+        LyricResults::Synced { .. } => "Lyrics (Synced)",
+        LyricResults::UnSynced { .. } => "Lyrics (Unsynced)",
+        _ => panic!("should have been checked against earlier"),
+    };
+    let rect = construct_and_render_block(title, &theme, state, Borders::ALL, frame, rect);
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Percentage(100)].as_ref())
+        .split(rect);
+    let lyric_box = &chunks[0];
 
     let line_to_focus = match mode {
         LyricMode::SyncedView => currently_singing_lineno.unwrap_or(0),
@@ -610,8 +620,8 @@ pub fn render_realtime_page(
 
     // update the scroll offset so that it doesn't exceed the lyric's length
     let n_lines = lyrics_len;
-    if *scroll_offset >= n_lines {
-        *scroll_offset = n_lines - 1;
+    if *scroll_offset > n_lines {
+        *scroll_offset = n_lines;
     }
     let scroll_offset = *scroll_offset;
 

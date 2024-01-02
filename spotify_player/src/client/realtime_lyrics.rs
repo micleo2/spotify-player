@@ -33,8 +33,8 @@ impl RealtimeLyricsClient {
         track_id_str: String,
     ) -> Result<LyricResults> {
         if self.sp_dc_cookie.is_empty() {
-            return Ok(LyricResults::UnSynced {
-                lyrics: vec!["Missing sp_dc_cookie".to_string()],
+            return Ok(LyricResults::Failure {
+                reason: "Missing sp_dc_cookie".to_string(),
             });
         }
         self.ensure_valid_token(http).await?;
@@ -61,8 +61,8 @@ impl RealtimeLyricsClient {
             .await?;
 
         if response.status() != 200 {
-            return Ok(LyricResults::UnSynced {
-                lyrics: vec!["No lyrics for this song".to_string()],
+            return Ok(LyricResults::Failure {
+                reason: "No lyrics for this song".to_string(),
             });
         }
 
