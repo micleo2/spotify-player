@@ -32,6 +32,72 @@ impl RealtimeLyricsClient {
         http: &reqwest::Client,
         track_id_str: String,
     ) -> Result<LyricResults> {
+        let url = format!("http://localhost:8000/?trackid={track_id_str}");
+        let response = http.get(url.clone()).send().await?;
+
+        if response.status() != 200 {
+            return Ok(LyricResults::Failure {
+                reason: "No lyrics for this song".to_string(),
+            });
+        }
+
+        let raw_response_str = response.text().await?.to_string();
+        let v: Value = serde_json::from_str(&raw_response_str)?;
+        let is_synced = v["syncType"]
+            .as_str()
+            .context("Missing lyric type data")?
+            == "LINE_SYNCED";
+        let lyrics_arr = v["lines"]
+            .as_array()
+            .context("Missing lyric data.")?;
+        if is_synced {
+            let mut lyric_res: Vec<SyncedLyric> = Vec::new();
+            for elm in lyrics_arr {
+                let cur_word = elm["words"].as_str().context("no words property")?;
+                lyric_res.push(SyncedLyric {
+                    words: if cur_word.is_empty() {
+                        "♪".to_string()
+                    } else {
+                        cur_word.to_owned()
+                    },
+                    start_time_ms: elm["startTimeMs"]
+                        .as_str()
+                        .context("no startTimeMs property")?
+                        .parse()
+                        .unwrap(),
+                });
+            }
+            // If the first lyric doesn't start until 2 seconds into the song, insert a placeholder
+            // lyric.
+            if lyric_res[0].start_time_ms > 2000 {
+                lyric_res.insert(
+                    0,
+                    SyncedLyric {
+                        words: "♪".to_string(),
+                        start_time_ms: 0,
+                    },
+                )
+            }
+            Ok(LyricResults::Synced { lyrics: lyric_res })
+        } else {
+            let mut lyric_res: Vec<String> = Vec::new();
+            for elm in lyrics_arr {
+                let cur_word = elm["words"].as_str().context("no words property")?;
+                lyric_res.push(if cur_word.is_empty() {
+                    "♪".to_string()
+                } else {
+                    cur_word.to_owned()
+                });
+            }
+            Ok(LyricResults::UnSynced { lyrics: lyric_res })
+        }
+    }
+
+    pub async fn get_lyrics_deprecated(
+        &mut self,
+        http: &reqwest::Client,
+        track_id_str: String,
+    ) -> Result<LyricResults> {
         if self.sp_dc_cookie.is_empty() {
             return Ok(LyricResults::Failure {
                 reason: "Missing sp_dc_cookie in app.toml".to_string(),
